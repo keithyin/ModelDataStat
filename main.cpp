@@ -7,15 +7,107 @@
 #include <boost\algorithm\string.hpp>
 #include <assert.h>
 #include <unordered_map>
+#include <sstream>
 
-class StatBase {
-private:
-	std::unordered_map<std::string, int> counter_;
-	float mean_;
-	float variance_;
-	float max_;
-	float min_;
+class Statistic {
+public:
+	virtual void Compute(const std::string &inp) = 0;
+	virtual const std::string& str() const= 0;
+	virtual ~Statistic() {};
 };
+
+class NumericalStat : public Statistic {
+public:
+	void Compute(const std::string &inp) override{
+		double cur_val = std::stod(inp);
+		this->update_mean(cur_val);
+		this->update_min_max(cur_val);
+	}
+	const std::string& str() const override{
+		std::ostringstream ostream;
+		ostream << "mean: " << cur_mean_ << "\n";
+		ostream << "min: " << min_ << "\n";
+		ostream << "max: " << max_ << "\n";
+		return ostream.str();
+	}
+private:
+	void update_mean(double cur_val) {
+		if (n_ == 0) {
+			cur_mean_ = cur_val;
+		}
+		else {
+			cur_mean_ = static_cast<double> (n_) / static_cast<double>(n_ + 1) * cur_mean_
+				+ cur_val / (n_ + 1);
+		}
+		n_++;
+	}
+	void update_min_max(double cur_val) {
+		if (cur_val > max_) max_ = cur_val;
+		if (cur_val < min_) min_ = cur_val;
+	}
+private:
+	double cur_mean_ = 0.0;
+	uint64_t n_ = 0;
+	double min_ = DBL_MAX;
+	double max_ = DBL_MIN;
+};
+
+// CounterStat: is used to count the freqency of the categrical fild
+// Example:
+//		CounterStat(std::vector<std::string>{}); is used to count the freqency of the caterical field
+//		CounterStat({" ", ""}); if the inp is a english sentence, this is used to count the freqency of the character.
+class CounterStat : public Statistic {
+public:
+	typedef std::unordered_map<std::string, uint64_t> Counter;
+	typedef std::pair<std::string, uint64_t> StrUint64Pair;
+	CounterStat(std::vector<std::string> delims): delims_(delims) {
+		counters_ = std::vector<Counter>{ delims_.size(), Counter{} };
+		assert(delims_.size() == counters_.size());
+	}
+	void Compute(const std::string& inp) override {
+		this->RecusivelyCompute(inp, 0);
+	}
+
+	const std::string& str() const override {
+		std::vector<StrUint64Pair> tmp_vec;
+		std::ostringstream ostream;
+		for (const auto& counter : counters_) {
+			tmp_vec.clear();
+			std::copy(counter.begin(), counter.end(), std::back_inserter<std::vector<StrUint64Pair>>(tmp_vec));
+			std::sort(tmp_vec.begin(), tmp_vec.end(), 
+					[](const StrUint64Pair& left, const StrUint64Pair& right)->bool {
+						return left.second >= right.second;
+				});
+			for (const auto& item : tmp_vec) {
+				ostream << item.first << "\t" << item.second << "\n";
+			}
+		}
+		return ostream.str();
+	}
+
+private:
+	void RecusivelyCompute(const std::string& inp, int level) {
+		if (level >= delims_.size()) return;
+		Counter& cur_level_counter = counters_[level];
+		const std::string& cur_delim = delims_[level];
+		std::vector<std::string> splited_res;
+		boost::split(splited_res, inp, boost::is_any_of(cur_delim), boost::token_compress_on);
+		for (const auto& item : splited_res) {
+			if (cur_level_counter.find(item) == cur_level_counter.end()) {
+				cur_level_counter[item] = 0;
+			}
+			cur_level_counter[item] ++;
+		}
+		for (const auto& item : splited_res) {
+			RecusivelyCompute(item, level + 1);
+		}
+	}
+
+private:
+	std::vector<std::string> delims_;
+	std::vector<Counter> counters_;
+};
+
 
 class ColumnsInfo {
 public:
@@ -87,4 +179,10 @@ int main(int argc, char* argv[]) {
 		}
 		std::cout << dir_iter->path().string() << std::endl;
 	}
+	std::vector<std::string> splited_res;
+	boost::split(splited_res, std::string{ "what||are||you||doing" }, boost::is_any_of("|"), boost::token_compress_on);
+	for (const auto& val : splited_res) {
+		std::cout << val << ",";
+	}
+	std::cout << std::endl;
 };
