@@ -202,6 +202,14 @@ void stat_worker(const std::string& filepath, const std::string& delim,
 
 }
 
+enum CommandLineParam {
+    REMOVE_FIRST_ROW = 1,
+    REMOVE_FIRST_COL = 2,
+    DELIM = 3,
+    COL_INFO = 4,
+    FILE_DIR = 5
+};
+
 /*
 usage: main.exe remove_first_row[1] remove_first_col[1] delimer[t] float-age,categorical-name,string-title file_dir
 */
@@ -212,14 +220,14 @@ int main(int argc, char* argv[]) {
     if (argc < 6) {
         throw usage;
     }
-    bool remove_first_row = (argv[1] == "1");
-    bool remove_first_col = (argv[2] == "1");
-    std::string delim = argv[3];
-    std::string dirname = argv[argc - 1];
+    bool remove_first_row = (argv[REMOVE_FIRST_ROW] == "1");
+    bool remove_first_col = (argv[REMOVE_FIRST_COL] == "1");
+    std::string delim = argv[DELIM];
+    std::string dirname = argv[FILE_DIR];
     boost::filesystem::path datadir(dirname);
     boost::filesystem::directory_iterator dir_iter(datadir);
 
-    ColumnsInfo col_info(argv[4]);
+    ColumnsInfo col_info(argv[COL_INFO]);
 
     for (; dir_iter != boost::filesystem::directory_iterator(); dir_iter++) {
         if (boost::filesystem::is_directory(*dir_iter)) {
