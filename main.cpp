@@ -8,18 +8,36 @@
 #include <assert.h>
 #include <unordered_map>
 #include <sstream>
+#include <memory>
+#include <mutex>
 
 class Statistic {
 public:
+    Statistic(const std::string& name) :name_(name) {}
     virtual void Compute(const std::string &inp) = 0;
     virtual const std::string& str() const= 0;
     virtual ~Statistic() {};
+    const std::string& name() {
+        return name_;
+    }
+    std::mutex& update_mutex() {
+        return update_mutex_;
+    }
+private:
+    std::string name_;
+    std::mutex update_mutex_;
+
 };
 
 class NumericalStat : public Statistic {
 public:
+    NumericalStat(const std::string& name): Statistic(name){}
+
     void Compute(const std::string &inp) override{
         double cur_val = std::stod(inp);
+
+        std::lock_guard<std::mutex> guard(update_mutex());
+
         this->update_mean(cur_val);
         this->update_min_max(cur_val);
     }
@@ -30,6 +48,11 @@ public:
         ostream << "max: " << max_ << "\n";
         return ostream.str();
     }
+
+    static std::shared_ptr<Statistic> instance(const std::string& name) {
+        return std::make_shared<NumericalStat>(name);
+    }
+
 private:
     void update_mean(double cur_val) {
         if (n_ == 0) {
@@ -60,11 +83,12 @@ class CounterStat : public Statistic {
 public:
     typedef std::unordered_map<std::string, uint64_t> Counter;
     typedef std::pair<std::string, uint64_t> StrUint64Pair;
-    CounterStat(std::vector<std::string> delims): delims_(delims) {
+    CounterStat(const std::string& name, const std::vector<std::string>& delims): delims_(delims), Statistic(name) {
         counters_ = std::vector<Counter>{ delims_.size(), Counter{} };
         assert(delims_.size() == counters_.size());
     }
     void Compute(const std::string& inp) override {
+        std::lock_guard<std::mutex> guard(update_mutex());
         this->RecusivelyCompute(inp, 0);
     }
 
@@ -83,6 +107,10 @@ public:
             }
         }
         return ostream.str();
+    }
+
+    static std::shared_ptr<Statistic> instance(const std::string& name) {
+        return std::make_shared<CounterStat>(name);
     }
 
 private:
@@ -111,6 +139,8 @@ private:
 
 class ColumnsInfo {
 public:
+    typedef std::pair<std::string, std::string> StrStrPair;
+
     ColumnsInfo(const std::string& columnsinfo) {
         std::vector<std::string> fields_list;
         boost::split(fields_list, columnsinfo, boost::is_any_of(","));
@@ -123,7 +153,7 @@ public:
         }
     }
 
-    const std::vector<std::pair<std::string, std::string>> cols_info() const {
+    const std::vector<StrStrPair> cols_info() const {
         return cols_info_;
     }
 
@@ -133,11 +163,13 @@ public:
     }
 
 private:
-    std::vector<std::pair<std::string, std::string>> cols_info_;
+    std::vector<StrStrPair> cols_info_;
 };
 
 void stat_worker(const std::string& filepath, const std::string& delim,
-        bool remove_first_line, bool remove_first_col) {
+        bool remove_first_line, bool remove_first_col, std::vector<std::shared_ptr<Statistic>> &statistics) {
+    
+    std::cout << "processing " << filepath << std::endl;
 
     std::ifstream inp_file(filepath);
     if (!inp_file) {
@@ -153,8 +185,19 @@ void stat_worker(const std::string& filepath, const std::string& delim,
         }
         line_items.clear();
         boost::split(line_items, line, boost::is_any_of(delim));
+        if (remove_first_col) {
+            line_items.erase(line_items.begin());
+        }
+        
+        assert(line_items.size() == statistics.size());
+        
+        for (int i = 0; i < line_items.size(); i++) {
+            statistics[i]->Compute(line_items[i]);
+        }
 
     }
+    std::cout << "processing " << filepath << " DONE!" << std::endl;
+
 }
 
 /*
