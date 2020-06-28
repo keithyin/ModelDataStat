@@ -83,6 +83,7 @@ class CounterStat : public Statistic {
 public:
     typedef std::unordered_map<std::string, uint64_t> Counter;
     typedef std::pair<std::string, uint64_t> StrUint64Pair;
+
     CounterStat(const std::string& name, const std::vector<std::string>& delims): delims_(delims), Statistic(name) {
         counters_ = std::vector<Counter>{ delims_.size(), Counter{} };
         assert(delims_.size() == counters_.size());
@@ -109,8 +110,8 @@ public:
         return ostream.str();
     }
 
-    static std::shared_ptr<Statistic> instance(const std::string& name) {
-        return std::make_shared<CounterStat>(name);
+    static std::shared_ptr<Statistic> instance(const std::string& name, const std::vector<std::string>& delims) {
+        return std::make_shared<CounterStat>(name, delims);
     }
 
 private:
@@ -173,6 +174,7 @@ void stat_worker(const std::string& filepath, const std::string& delim,
 
     std::ifstream inp_file(filepath);
     if (!inp_file) {
+        std::cerr << "open file " << filepath << " error!" << std::endl;
         return;
     }
     bool first_line = true;
@@ -216,11 +218,15 @@ int main(int argc, char* argv[]) {
     std::string dirname = argv[argc - 1];
     boost::filesystem::path datadir(dirname);
     boost::filesystem::directory_iterator dir_iter(datadir);
+
+    ColumnsInfo col_info(argv[4]);
+
     for (; dir_iter != boost::filesystem::directory_iterator(); dir_iter++) {
         if (boost::filesystem::is_directory(*dir_iter)) {
             continue;
         }
         std::cout << dir_iter->path().string() << std::endl;
+        
     }
     std::vector<std::string> splited_res;
     boost::split(splited_res, std::string{ "what||are||you||doing" }, boost::is_any_of("|"), boost::token_compress_on);
