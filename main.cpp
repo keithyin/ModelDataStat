@@ -49,7 +49,7 @@ public:
         return ostream.str();
     }
 
-    static std::shared_ptr<Statistic> instance(const std::string& name) {
+    static std::shared_ptr<Statistic> instance(const std::string& name, const std::vector<std::string>&) {
         return std::make_shared<NumericalStat>(name);
     }
 
@@ -137,6 +137,34 @@ private:
     std::vector<Counter> counters_;
 };
 
+class StatManager {
+public:
+    static StatManager& instance() {
+        static StatManager stat_manager;
+        return stat_manager;
+    }
+       
+    std::shared_ptr<Statistic> GetStatistic(const std::string& stat_name, const std::string& name, 
+            const std::vector<std::string>& delims) {
+        
+        if (manager_.find(stat_name) == manager_.end()) {
+            std::ostringstream oss;
+            oss << stat_name << " not registered in StatManager" << std::endl;
+            throw oss.str();
+        }
+        return manager_[stat_name](name, delims);
+    }
+
+private:
+    StatManager() {
+        manager_.insert(std::make_pair("numerical", NumericalStat::instance));
+        manager_.insert(std::make_pair("categorical", CounterStat::instance));
+    }
+private:
+    std::unordered_map<std::string,
+        std::function<std::shared_ptr<Statistic>(const std::string&, const std::vector<std::string>&)>> manager_;
+};
+
 
 class ColumnsInfo {
 public:
@@ -158,13 +186,32 @@ public:
         return cols_info_;
     }
 
-    const std::pair<std::string, std::string >& cols_info(int i) const {
+    const StrStrPair& cols_info(int i) const {
         assert(i < cols_info_.size());
         return cols_info_[i];
     }
+    
+    std::vector<std::shared_ptr<Statistic>>& cols_stats() {
+        return cols_stats_;
+    }
+
+    void DumpStatInfo() {
+        //TODO
+    }
 
 private:
+    void set_cols_stats() {
+        for (const auto& info_pair : cols_info_) {
+            cols_stats_.push_back(
+                StatManager::instance().GetStatistic(
+                    info_pair.first, info_pair.second, std::vector<std::string>()));
+
+        }
+    }
+private:
+    // [[stat_type, name]]
     std::vector<StrStrPair> cols_info_;
+    std::vector<std::shared_ptr<Statistic>> cols_stats_;
 };
 
 void stat_worker(const std::string& filepath, const std::string& delim,
