@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.4)
+project(MyProj)
+
+add_executable(app main.cpp)
+target_include_directories(app PUBLIC "D:/Program Files (x86)/boost_1_73_0/boost_1_73_0")
+target_link_directories(app PUBLIC "D:/Program Files (x86)/boost_1_73_0/boost_1_73_0/stage/lib")
